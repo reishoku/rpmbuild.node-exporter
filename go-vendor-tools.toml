@@ -1,2 +1,17 @@
+[archive]
+post_commands = [
+    "curl -sL https://raw.githubusercontent.com/dennwc/ioctl/master/LICENSE -o vendor/github.com/dennwc/ioctl/LICENSE",
+]
+
 [licensing]
 detector = "askalono"
+
+[[licensing.licenses]]
+path = "vendor/howett.net/plist/LICENSE"
+sha256sum = "20d9b7d9372369484ecadae229d3e3efee8029b259e11c9a1b07d2e0a3c82e39"
+expression = "BSD-2-Clause AND BSD-3-Clause"
+
+[[licensing.licenses]]
+path = "vendor/github.com/dennwc/ioctl/LICENSE"
+sha256sum = "27d4be84d5a5e09f13ddda42f80d4fe846b2f65cf830f70d21a2bf4b623ab885"
+expression = "MIT"
