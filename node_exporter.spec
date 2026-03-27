@@ -37,6 +37,8 @@ written in Go with pluggable metric collectors.
 %prep
 %autosetup -p1 -n node_exporter-%{version}
 tar -xf %{S:1}
+# Remove upstream example systemd units to avoid confusion with our custom ones
+rm -rf examples/systemd
 
 %generate_buildrequires
 %go_vendor_license_buildrequires -c %{S:2}
