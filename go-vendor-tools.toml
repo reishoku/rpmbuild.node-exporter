@@ -1,6 +1,6 @@
 [archive]
 post_commands = [
-    "curl -sL https://raw.githubusercontent.com/dennwc/ioctl/master/LICENSE -o vendor/github.com/dennwc/ioctl/LICENSE",
+    ["curl", "-sL", "https://raw.githubusercontent.com/dennwc/ioctl/master/LICENSE", "-o", "vendor/github.com/dennwc/ioctl/LICENSE"],
 ]
 
 [licensing]
