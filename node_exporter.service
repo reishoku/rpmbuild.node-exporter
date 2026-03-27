@@ -1,14 +1,14 @@
 [Unit]
 Description=Prometheus Node Exporter
 Documentation=https://github.com/prometheus/node_exporter
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
 User=node_exporter
 Group=node_exporter
-ExecStart=/usr/bin/node_exporter
+EnvironmentFile=-/etc/default/node-exporter
+ExecStart=/usr/bin/node_exporter $NODE_EXPORTER_OPTS
 Restart=on-failure
 RestartSec=5s
 

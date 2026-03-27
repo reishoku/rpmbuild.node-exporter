@@ -15,6 +15,7 @@ Source1:        node_exporter-%{version}-vendor.tar.bz2
 Source2:        go-vendor-tools.toml
 Source3:        node_exporter.service
 Source4:        node-exporter.xml
+Source5:        node_exporter.conf
 
 ExclusiveArch:  %{golang_arches_future}
 BuildRequires:  go-rpm-macros
@@ -56,10 +57,7 @@ install -Dpm 0755 %{gobuilddir}/bin/node_exporter %{buildroot}%{_bindir}/node_ex
 install -Dpm 0644 %{S:3} %{buildroot}%{_unitdir}/node_exporter.service
 install -Dpm 0644 %{S:4} %{buildroot}%{_prefix}/lib/firewalld/services/node-exporter.xml
 
-install -dm 0755 %{buildroot}%{_sysusersdir}
-cat > %{buildroot}%{_sysusersdir}/node_exporter.conf <<'EOF'
-u node_exporter - "Prometheus Node Exporter" /
-EOF
+install -Dpm 0644 %{S:5} %{buildroot}%{_sysusersdir}/node_exporter.conf
 
 %check
 %go_vendor_license_check -c %{S:2}
