@@ -1,5 +1,4 @@
-# Unit tests require fixtures extracted by upstream's ttar tool
-%bcond check 0
+%bcond check 1
 
 %global goipath         github.com/prometheus/node_exporter
 %global forgeurl        https://github.com/prometheus/node_exporter
@@ -64,7 +63,11 @@ install -Dpm 0644 %{S:5} %{buildroot}%{_sysusersdir}/node_exporter.conf
 %check
 %go_vendor_license_check -c %{S:2}
 %if %{with check}
+# Unit tests require fixtures extracted by upstream's ttar tool,
+# which are unavailable in CI. Skip when CI=true (GitHub Actions).
+if [ -z "${CI}" ]; then
 %gocheck2
+fi
 %endif
 
 %pre
