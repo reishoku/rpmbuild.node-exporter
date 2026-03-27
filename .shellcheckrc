@@ -1,0 +1,7 @@
+shell=bash
+external-sources=true
+disable=SC1040
+enable=avoid-nullary-conditions
+enable=check-extra-masked-returns
+enable=deprecate-which
+enable=require-variable-braces

@@ -1,0 +1,7 @@
+# rpmlint configuration
+# See: rpmlint --print-config
+# See: rpmlint --explain <check-id>
+
+Filters = [
+    ".*spelling-error.*",
+]

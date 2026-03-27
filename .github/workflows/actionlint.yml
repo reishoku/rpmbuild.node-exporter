@@ -1,0 +1,26 @@
+name: Lint GitHub Actions workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/*.yml'
+      - '.github/workflows/*.yaml'
+  workflow_dispatch:
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  actionlint:
+    if: vars.ACTIONLINT_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1.7.11

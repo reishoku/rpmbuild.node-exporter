@@ -1,0 +1,160 @@
+name: Sync RPM spec version
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'go.mod'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'pyproject.toml'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-version-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  sync-version:
+    if: >-
+      !github.event.repository.is_template &&
+      github.actor == 'dependabot[bot]' &&
+      vars.SYNC_VERSION_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - name: Fetch Dependabot metadata
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Get new version and package name
+        id: get-version
+        env:
+          METADATA_VERSION: ${{ steps.dependabot-metadata.outputs.new-version }}
+          METADATA_DEPS: ${{ steps.dependabot-metadata.outputs.dependency-names }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${METADATA_VERSION:-}" ] && [ "${METADATA_VERSION}" != "null" ]; then
+            VERSION="${METADATA_VERSION}"
+            echo "Using Dependabot metadata version: ${VERSION}"
+          else
+            VERSION="$(printf '%s' "${PR_TITLE}" | sed -n 's/^.* to \([^ ]*\).*/\1/p')"
+            echo "Using PR title version: ${VERSION}"
+          fi
+
+          if [ -z "${VERSION}" ] || [ "${VERSION}" = "null" ]; then
+            echo "Failed to determine version" >&2
+            exit 1
+          fi
+
+          if ! printf '%s' "${VERSION}" | grep -qE '^[0-9A-Za-z._+~:-]+$'; then
+            echo "Invalid version format: ${VERSION}" >&2
+            exit 1
+          fi
+
+          if [ -z "${METADATA_DEPS:-}" ] || [ "${METADATA_DEPS}" = "null" ]; then
+            echo "Failed to determine package name" >&2
+            exit 1
+          fi
+          PKG_NAME="${METADATA_DEPS}"
+          echo "Package: ${PKG_NAME}"
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "package=${PKG_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Find spec file
+        id: find-spec
+        run: |
+          set -euo pipefail
+          specs="$(find . -mindepth 1 -maxdepth 1 -name '*.spec' -printf '%f\n')"
+          if [ -z "${specs}" ]; then
+            echo "No .spec file found" >&2
+            exit 1
+          fi
+          spec_count="$(printf '%s\n' "${specs}" | wc -l)"
+          if [ "${spec_count}" -gt 1 ]; then
+            echo "Multiple .spec files found:" >&2
+            printf '%s\n' "${specs}" >&2
+            exit 1
+          fi
+          echo "spec_file=${specs}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install rpmdev tools
+        run: |
+          curl -sLO 'https://pagure.io/rpmdevtools/raw/main/f/rpmdev-bumpspec'
+          curl -sLO 'https://pagure.io/rpmdevtools/raw/main/f/rpmdev-packager'
+          chmod +x rpmdev-bumpspec rpmdev-packager
+          sudo mv rpmdev-bumpspec rpmdev-packager /usr/bin/
+
+      - name: Update spec version and changelog
+        id: bump-spec
+        env:
+          NEW_VERSION: ${{ steps.get-version.outputs.version }}
+          PKG_NAME: ${{ steps.get-version.outputs.package }}
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          set -euo pipefail
+
+          changed=false
+          spec_changed=false
+          script_changed=false
+
+          if grep -qE "^[*] .* - ${NEW_VERSION}-" "${SPEC_FILE}"; then
+            echo "Changelog already contains ${NEW_VERSION}"
+          else
+            rpmdev-bumpspec \
+              -u 'KOSHIKAWA Kenichi <reishoku.misc@pm.me>' \
+              -d "$(date '+%a %b %d %Y')" \
+              -n "${NEW_VERSION}" \
+              -c "Update ${PKG_NAME} => ${NEW_VERSION}" \
+              "${SPEC_FILE}"
+            spec_changed=true
+          fi
+
+          if [ -f generate-vendor-tarball.sh ]; then
+            current_default="$(sed -n -E 's/^VERSION="\$\{1:-([^}]+)\}"/\1/p' generate-vendor-tarball.sh)"
+            if [ -n "${current_default}" ] && [ "${current_default}" != "${NEW_VERSION}" ]; then
+              sed -i -E 's/^VERSION="\$\{1:-[^}]+\}"/VERSION="${1:-'"${NEW_VERSION}"'}"/' generate-vendor-tarball.sh
+              script_changed=true
+            fi
+          fi
+
+          if [ "${spec_changed}" = "true" ] || [ "${script_changed}" = "true" ]; then
+            changed=true
+          fi
+
+          echo "changed=${changed}" >> "${GITHUB_OUTPUT}"
+
+      - name: Commit and push changes
+        if: steps.bump-spec.outputs.changed == 'true'
+        env:
+          NEW_VERSION: ${{ steps.get-version.outputs.version }}
+          PKG_NAME: ${{ steps.get-version.outputs.package }}
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${SPEC_FILE}"
+          if [ -f generate-vendor-tarball.sh ]; then
+            git add generate-vendor-tarball.sh
+          fi
+          git commit -m "Update ${PKG_NAME} => ${NEW_VERSION}"
+          git tag "${NEW_VERSION}"
+          git push origin
+          git push origin "refs/tags/${NEW_VERSION}"

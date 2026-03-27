@@ -1,0 +1,30 @@
+name: Lint Ansible files
+
+on:
+  pull_request:
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - 'roles/**'
+      - 'playbooks/**'
+      - '.ansible-lint'
+      - '.github/workflows/ansible-lint.yml'
+  workflow_dispatch:
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  ansible-lint:
+    if: vars.ANSIBLE_LINT_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run ansible-lint
+        uses: ansible/ansible-lint@main

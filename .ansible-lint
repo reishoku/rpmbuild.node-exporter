@@ -1,0 +1,13 @@
+profile: moderate
+
+offline: true
+
+exclude_paths:
+  - .github/
+
+skip_list:
+  - role-name
+  - yaml
+
+warn_list:
+  - experimental

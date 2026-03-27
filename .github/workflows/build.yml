@@ -1,0 +1,135 @@
+name: Build RPM
+
+on:
+  pull_request:
+    paths:
+      - '*.spec'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  build-rpm:
+    if: >-
+      !github.event.repository.is_template &&
+      vars.BUILD_ENABLED != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [
+          "ubuntu-24.04",
+          "ubuntu-24.04-arm"
+        ]
+        container:
+          # - "almalinux:9"
+          - "almalinux:10"
+          - "almalinux:10-kitten"
+          # - "quay.io/centos/centos:stream9"
+          - "quay.io/centos/centos:stream10"
+          - "fedora:42"
+          - "fedora:43"
+          - "fedora:44"
+    runs-on: ${{ matrix.runs-on }}
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          fetch-tags: true
+
+      - name: Configure dnf
+        run: |
+          {
+            echo 'install_weak_deps=False'
+            echo 'max_downloads_per_mirror=20'
+            echo 'max_parallel_downloads=20'
+          } >> /etc/dnf/dnf.conf
+
+      - name: Install RPM build tools
+        run: |
+          dnf -q --refresh makecache -y
+          dnf -q install -y dnf-plugins-core findutils git rpm-build rpmdevtools
+
+      - name: Enable EPEL and CRB (AlmaLinux)
+        if: startsWith(matrix.container, 'almalinux:')
+        run: |
+          dnf config-manager --set-enabled crb
+          dnf -q install -y epel-release
+
+      - name: Enable EPEL and CRB (CentOS Stream)
+        if: contains(matrix.container, 'centos')
+        run: |
+          dnf -q install -y epel-release
+          dnf config-manager --set-enabled crb
+
+      - name: Set up RPM build environment
+        run: |
+          rpmdev-setuptree
+
+      - name: Find spec file
+        id: find-spec
+        run: |
+          set -euo pipefail
+          specs="$(find . -mindepth 1 -maxdepth 1 -name '*.spec' -printf '%f\n')"
+          if [ -z "${specs}" ]; then
+            echo "No .spec file found" >&2
+            exit 1
+          fi
+          spec_count="$(printf '%s\n' "${specs}" | wc -l)"
+          if [ "${spec_count}" -gt 1 ]; then
+            echo "Multiple .spec files found:" >&2
+            printf '%s\n' "${specs}" >&2
+            exit 1
+          fi
+          echo "spec_file=${specs}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install build dependencies
+        env:
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          dnf -q builddep -y "${SPEC_FILE}"
+
+      - name: Copy spec file
+        env:
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          cp "${SPEC_FILE}" ~/rpmbuild/SPECS/
+
+      - name: Copy source file
+        run: |
+          find . -mindepth 1 -maxdepth 1 -type f \
+            ! -name '.*' \
+            ! -name '*.spec' \
+            -exec cp {} ~/rpmbuild/SOURCES/ \;
+
+      - name: Download source files
+        env:
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          rpmdev-spectool -C ~/rpmbuild/SOURCES/ -g ~/rpmbuild/SPECS/"${SPEC_FILE}"
+
+      - name: Generate vendor tarball
+        if: hashFiles('generate-vendor-tarball.sh') != ''
+        run: |
+          bash ./generate-vendor-tarball.sh
+
+      - name: Build RPM
+        env:
+          SPEC_FILE: ${{ steps.find-spec.outputs.spec_file }}
+        run: |
+          rpmbuild -bb \
+            --nodebuginfo \
+            ~/rpmbuild/SPECS/"${SPEC_FILE}"
+
+      - name: List built RPMs
+        run: |
+          find ~/rpmbuild/RPMS -type f -name "*.rpm" -ls
+          find ~/rpmbuild/RPMS -type f -name "*.rpm" -exec rpm -qpi {} \+
+          find ~/rpmbuild/RPMS -type f -name "*.rpm" -exec rpm -qpl {} \+

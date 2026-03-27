@@ -1,0 +1,23 @@
+name: Check editorconfig
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  editorconfig:
+    if: vars.EDITORCONFIG_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run editorconfig-checker
+        uses: editorconfig-checker/action-editorconfig-checker@main

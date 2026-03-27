@@ -1,0 +1,24 @@
+name: rpmlint
+
+on:
+  pull_request:
+    paths:
+      - '*.spec'
+      - '.rpmlint.toml'
+      - '.github/workflows/rpmlint.yml'
+  workflow_dispatch:
+
+jobs:
+  rpmlint:
+    if: >-
+      !github.event.repository.is_template &&
+      vars.RPMLINT_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run rpmlint
+        uses: reishoku/actions.rpmlint@v1

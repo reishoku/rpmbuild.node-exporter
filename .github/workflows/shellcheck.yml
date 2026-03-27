@@ -1,0 +1,35 @@
+name: Lint shell scripts
+
+on:
+  pull_request:
+    paths:
+      - '**/*.sh'
+      - '.shellcheckrc'
+      - '.github/workflows/shellcheck.yml'
+  workflow_dispatch:
+
+env:
+  LANG: C
+  LC_TIME: C
+  TZ: Asia/Tokyo
+
+jobs:
+  shellcheck:
+    if: vars.SHELLCHECK_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Run shellcheck
+        run: |
+          set -euo pipefail
+          files="$(git ls-files '*.sh')"
+          if [ -z "${files}" ]; then
+            echo "No shell scripts found"
+            exit 0
+          fi
+          printf '%s\n' "${files}"
+          printf '%s\n' "${files}" | xargs shellcheck
