@@ -1,0 +1,57 @@
+name: Check upstream update
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # 05:00 JST
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-update:
+    if: >-
+      !github.event.repository.is_template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          sparse-checkout: '*.spec'
+
+      - name: Check for new upstream release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          current_version="$(grep -m1 '^Version:' ./*.spec | gawk '{print $2}')"
+          echo "Current version: ${current_version}"
+
+          latest="$(gh release view --repo prometheus/node_exporter --json tagName --jq '.tagName' | sed 's/^v//')"
+          echo "Latest upstream: ${latest}"
+
+          if [ "${current_version}" = "${latest}" ]; then
+            echo "Already up to date"
+            exit 0
+          fi
+
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" \
+            --search "Update node_exporter - ${latest} in:title" \
+            --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${existing}" ]; then
+            echo "Issue #${existing} already exists"
+            exit 0
+          fi
+
+          gh issue create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Update node_exporter - ${latest}" \
+            --assignee reishoku \
+            --body "${SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}"
