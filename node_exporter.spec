@@ -1,4 +1,5 @@
-%bcond check 1
+# Unit tests require fixtures extracted by upstream's ttar tool
+%bcond check 0
 
 %global goipath         github.com/prometheus/node_exporter
 %global forgeurl        https://github.com/prometheus/node_exporter
